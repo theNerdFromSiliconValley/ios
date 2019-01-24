@@ -44,7 +44,7 @@ extension ApiService {
             return "/system_messages"
         }
     }
-
+    
     var method: Moya.Method {
         switch self {
         case .profileList, .userInfo, .profileConfig, .systemMessages, .checkCertificate:
@@ -53,7 +53,7 @@ extension ApiService {
             return .post
         }
     }
-
+    
     var task: Task {
         switch self {
         case .profileList, .userInfo, .systemMessages:
@@ -66,7 +66,7 @@ extension ApiService {
             return .requestParameters(parameters: ["profile_id": profileId], encoding: URLEncoding.queryString)
         }
     }
-
+    
     var sampleData: Data {
         return "".data(using: String.Encoding.utf8)!
     }
@@ -75,7 +75,7 @@ extension ApiService {
 struct DynamicApiService: TargetType, AcceptJson {
     let baseURL: URL
     let apiService: ApiService
-
+    
     var path: String { return apiService.path }
     var method: Moya.Method { return apiService.method }
     var task: Task { return apiService.task }
@@ -86,27 +86,27 @@ class DynamicApiProvider: MoyaProvider<DynamicApiService> {
     let api: Api
     let authConfig: OIDServiceConfiguration
     private var credentialStorePlugin: CredentialStorePlugin
-
+    
     var actualApi: Api {
         return api.instance?.group?.distributedAuthorizationApi ?? api
     }
-
+    
     var currentAuthorizationFlow: OIDExternalUserAgentSession?
-
+    
     public func authorize(presentingViewController: UIViewController) -> Promise<OIDAuthState> {
         let request = OIDAuthorizationRequest(configuration: authConfig, clientId: Config.shared.clientId, scopes: ["config"], redirectURL: Config.shared.redirectUrl, responseType: OIDResponseTypeCode, additionalParameters: nil)
         return Promise(resolver: { seal in
             currentAuthorizationFlow = OIDAuthState.authState(byPresenting: request, presenting: presentingViewController, callback: { (authState, error) in
-
+                
                 if let error = error {
                     seal.reject(error)
                     return
                 }
-
+                
                 self.actualApi.authState = authState
-
+                
                 precondition(authState != nil, "THIS SHOULD NEVER HAPPEN")
-
+                
                 self.api.managedObjectContext?.perform {
                     self.api.instance?.group?.distributedAuthorizationApi = self.actualApi
                 }
@@ -116,37 +116,37 @@ class DynamicApiProvider: MoyaProvider<DynamicApiService> {
                     seal.reject(error)
                     return
                 }
-
+                
                 seal.fulfill(authState!)
             })
         })
     }
-
+    
     public init?(api: Api, endpointClosure: @escaping EndpointClosure = MoyaProvider.defaultEndpointMapping,
                  stubClosure: @escaping StubClosure = MoyaProvider.neverStub,
                  callbackQueue: DispatchQueue? = nil,
                  manager: Manager = MoyaProvider<Target>.defaultAlamofireManager(),
                  plugins: [PluginType] = [],
                  trackInflights: Bool = false) {
-//    public init(api: Api, endpointClosure: @escaping EndpointClosure = MoyaProvider.defaultEndpointMapping,
-//                requestClosure: @escaping RequestClosure = MoyaProvider.defaultRequestMapping,
-//                stubClosure: @escaping StubClosure = MoyaProvider.neverStub,
-//                manager: Manager = MoyaProvider<DynamicInstanceService>.defaultAlamofireManager(),
-//                plugins: [PluginType] = [],
-//                trackInflights: Bool = false) {
+        //    public init(api: Api, endpointClosure: @escaping EndpointClosure = MoyaProvider.defaultEndpointMapping,
+        //                requestClosure: @escaping RequestClosure = MoyaProvider.defaultRequestMapping,
+        //                stubClosure: @escaping StubClosure = MoyaProvider.neverStub,
+        //                manager: Manager = MoyaProvider<DynamicInstanceService>.defaultAlamofireManager(),
+        //                plugins: [PluginType] = [],
+        //                trackInflights: Bool = false) {
         guard let authorizationEndpoint = api.authorizationEndpoint else { return nil }
         guard let tokenEndpoint = api.tokenEndpoint else { return nil }
         self.api = api
         self.credentialStorePlugin = CredentialStorePlugin()
-
+        
         var plugins = plugins
         plugins.append(self.credentialStorePlugin)
-
+        
         self.authConfig = OIDServiceConfiguration(authorizationEndpoint: URL(string: authorizationEndpoint)!, tokenEndpoint: URL(string: tokenEndpoint)!)
         super.init(endpointClosure: endpointClosure, stubClosure: stubClosure, manager: manager, plugins: plugins, trackInflights: trackInflights)
-
+        
     }
-
+    
     public func request(apiService: ApiService,
                         queue: DispatchQueue? = nil,
                         progress: Moya.ProgressBlock? = nil) -> Promise<Moya.Response> {
@@ -161,14 +161,14 @@ class DynamicApiProvider: MoyaProvider<DynamicApiService> {
                         }
                         return
                     }
-
+                    
                     self.credentialStorePlugin.accessToken = accessToken
                     seal.fulfill(())
                 })
             } else {
                 seal.reject(ApiServiceError.noAuthState)
             }
-
+            
         }).then {_ -> Promise<Moya.Response> in
             return self.request(target: DynamicApiService(baseURL: URL(string: self.api.apiBaseUri!)!, apiService: apiService))
         }
@@ -179,7 +179,7 @@ extension DynamicApiProvider: Hashable {
     static func == (lhs: DynamicApiProvider, rhs: DynamicApiProvider) -> Bool {
         return lhs.api.apiBaseUri == rhs.api.apiBaseUri
     }
-
+    
     var hashValue: Int {
         return api.apiBaseUri?.hashValue ?? 0
     }
